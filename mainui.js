@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { StyleSheet, View, Text, ScrollView, SafeAreaView, TouchableOpacity, Dimensions, Image, Platform, TextInput, FlatList, ActivityIndicator, Alert, Modal, StatusBar, I18nManager } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, SafeAreaView, TouchableOpacity, Dimensions, Image, Platform, TextInput, FlatList, ActivityIndicator, Alert, Modal, StatusBar, I18nManager, BackHandler } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { useFocusEffect, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigationState, getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming, withSequence, withDelay, useAnimatedProps } from 'react-native-reanimated';
 import * as Progress from 'react-native-progress';
@@ -28,7 +28,6 @@ import EditProfileScreen from './editprofile';
 import SettingsScreen from './setting'; 
 import AboutScreen from './about';
 
-// ✅ --- START: تعريف مهمة الخلفية لعد الخطوات --- ✅
 const STEPS_NOTIFICATION_TASK = 'steps-notification-task';
 
 TaskManager.defineTask(STEPS_NOTIFICATION_TASK, async () => {
@@ -71,7 +70,7 @@ TaskManager.defineTask(STEPS_NOTIFICATION_TASK, async () => {
                     body: `رائع! لقد حققت هدفك اليومي وهو ${goal.toLocaleString()} خطوة.`,
                     sound: true,
                 },
-                trigger: null, // send immediately
+                trigger: null,
             });
             await AsyncStorage.setItem(todaySentKey, 'true');
             console.log("[Background Task] Goal reached! Notification sent.");
@@ -84,7 +83,6 @@ TaskManager.defineTask(STEPS_NOTIFICATION_TASK, async () => {
         return BackgroundFetch.BackgroundFetchResult.Failed;
     }
 });
-// ✅ --- END: نهاية تعريف المهمة --- ✅
 
 const lightTheme = {
     primary: '#388E3C', background: '#E8F5E9', card: '#FFFFFF', textPrimary: '#212121', textSecondary: '#757575', progressUnfilled: '#D6EAD7', disabled: '#BDBDBD', carbs: '#007BFF', protein: '#FF7043', fat: '#FFC107', fiber: '#4CAF50', sugar: '#9C27B0', sodium: '#2196F3', overLimit: '#D32F2F', tabBarBackground: '#FFFFFF', tabBarIndicator: '#4CAF50', tabBarIcon: '#222327', white: '#FFFFFF', readOnlyBanner: '#FFA000', indicatorDot: '#1B5E20', statusBar: 'dark-content',
@@ -260,30 +258,46 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const INDICATOR_DIAMETER = 70;
 
 const MagicLineTabBar = ({ state, descriptors, navigation, theme, t, isRTL }) => {
-    const TAB_COUNT = state.routes.length; 
-    const TAB_WIDTH = SCREEN_WIDTH / TAB_COUNT; 
-    const [profileImage, setProfileImage] = useState(null); 
-    const translateX = useSharedValue(0);
-    useEffect(() => { 
+    const TAB_COUNT = state.routes.length;
+    const TAB_WIDTH = SCREEN_WIDTH / TAB_COUNT;
+    const [profileImage, setProfileImage] = useState(null);
+
+    const initialIndex = isRTL ? (TAB_COUNT - 1) - state.index : state.index;
+    const initialPosition = initialIndex * TAB_WIDTH;
+    const translateX = useSharedValue(initialPosition);
+
+    const previousIndex = useRef(state.index);
+
+    useEffect(() => {
         const targetIndex = isRTL ? (TAB_COUNT - 1) - state.index : state.index;
-        translateX.value = withTiming(targetIndex * TAB_WIDTH, { duration: 500 }); 
-    }, [state.index, TAB_WIDTH, isRTL, TAB_COUNT, translateX]);
-    useFocusEffect(useCallback(() => { 
-        const loadProfileImage = async () => { 
-            try { 
-                const jsonValue = await AsyncStorage.getItem('userProfile'); 
+        const newPosition = targetIndex * TAB_WIDTH;
+
+        if (previousIndex.current !== state.index) {
+            translateX.value = withTiming(newPosition, { duration: 500 });
+        } else {
+            translateX.value = newPosition;
+        }
+
+        previousIndex.current = state.index;
+
+    }, [state.index, TAB_WIDTH, isRTL, TAB_COUNT]);
+
+    useFocusEffect(useCallback(() => {
+        const loadProfileImage = async () => {
+            try {
+                const jsonValue = await AsyncStorage.getItem('userProfile');
                 setProfileImage(jsonValue ? JSON.parse(jsonValue).profileImage : null);
-            } catch (e) { 
-                console.error("Failed to load profile image for tab bar:", e); 
-            } 
-        }; 
-        loadProfileImage(); 
+            } catch (e) {
+                console.error("Failed to load profile image for tab bar:", e);
+            }
+        };
+        loadProfileImage();
     }, []));
 
     const indicatorAnimatedStyle = useAnimatedStyle(() => ({ transform: [{ translateX: translateX.value }] }));
     const routes = isRTL ? [...state.routes].reverse() : state.routes;
-    
-    return ( 
+
+    return (
         <View style={styles.tabBarContainer(theme)}>
             <View style={styles.animationWrapper}><LeafAnimation trigger={state.index} /></View>
             
@@ -294,16 +308,16 @@ const MagicLineTabBar = ({ state, descriptors, navigation, theme, t, isRTL }) =>
                 </View>
             </Animated.View>
 
-            {routes.map((route) => { 
+            {routes.map((route) => {
                 const descriptor = descriptors[route.key];
                 const { options } = descriptor;
                 const isFocused = state.routes[state.index].key === route.key;
-                const onPress = () => { 
-                    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true }); 
-                    if (!isFocused && !event.defaultPrevented) { 
-                        navigation.navigate(route.name); 
-                    } 
-                }; 
+                const onPress = () => {
+                    const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                    if (!isFocused && !event.defaultPrevented) {
+                        navigation.navigate(route.name);
+                    }
+                };
                 
                 const iconAnimatedStyle = useAnimatedStyle(() => ({
                     transform: [{ translateY: withTiming(isFocused ? -32 : 0, { duration: 500 }) }],
@@ -315,29 +329,30 @@ const MagicLineTabBar = ({ state, descriptors, navigation, theme, t, isRTL }) =>
                 
                 const isProfileTab = route.name === 'ProfileStack';
                 
-                return ( 
+                return (
                     <TouchableOpacity key={route.key} style={[styles.tabItem, { width: TAB_WIDTH, zIndex: 1 }]} onPress={onPress}>
                         <Animated.View style={[styles.tabIconContainer, iconAnimatedStyle]}>
                             {isProfileTab ? (
-                                <Image 
-                                    source={profileImage ? { uri: profileImage } : require('./assets/profile.png')} 
-                                    style={styles.profileTabIcon} 
+                                <Image
+                                    source={profileImage ? { uri: profileImage } : require('./assets/profile.png')}
+                                    style={styles.profileTabIcon}
                                 />
                             ) : (
-                                <Ionicons 
-                                    name={options.tabBarIconName || 'alert-circle-outline'} 
-                                    size={28} 
+                                <Ionicons
+                                    name={options.tabBarIconName || 'alert-circle-outline'}
+                                    size={28}
                                     color={isFocused ? theme.textPrimary : theme.tabBarIcon}
                                 />
                             )}
                         </Animated.View>
                         <Animated.Text style={[styles.tabText(theme), textAnimatedStyle]}>{options.tabBarLabel}</Animated.Text>
-                    </TouchableOpacity> 
-                ); 
+                    </TouchableOpacity>
+                );
             })}
-        </View> 
+        </View>
     );
 };
+
 
 const Tab = createBottomTabNavigator();
 const DiaryStack = createStackNavigator();
@@ -367,10 +382,12 @@ function DiaryStackNavigator({ setHasProgress, theme, t, isRTL, language }) {
   ); 
 }
 
-function ReportsStackNavigator({ theme, t, isRTL }) { 
+function ReportsStackNavigator({ theme, language }) { 
   return ( 
     <ReportsStack.Navigator screenOptions={commonStackOptions(theme)}>
-      <ReportsStack.Screen name="ReportsHome" component={ReportsScreen} options={{ headerShown: false }} />
+      <ReportsStack.Screen name="ReportsHome" options={{ headerShown: false }}>
+        {props => <ReportsScreen {...props} appLanguage={language} />}
+      </ReportsStack.Screen>
     </ReportsStack.Navigator> 
   ); 
 }
@@ -393,6 +410,36 @@ function MainUIScreen({ appLanguage }) {
   const [language, setLanguage] = useState(appLanguage);
   const [isRTL, setIsRTL] = useState(I18nManager.isRTL);
   const [hasProgress, setHasProgress] = useState(false);
+  
+  const navState = useNavigationState(state => state);
+
+  useFocusEffect(
+    React.useCallback(() => {
+        if (Platform.OS !== 'android') {
+            return;
+        }
+        const onBackPress = () => {
+            if (!navState) { return false; }
+            
+            const mainUIRoute = navState.routes.find(route => route.name === 'MainUI');
+            if (!mainUIRoute || !mainUIRoute.state) { return false; }
+
+            const tabState = mainUIRoute.state;
+            const currentTabRoute = tabState.routes[tabState.index];
+
+            const isTabAtRoot = !currentTabRoute.state || currentTabRoute.state.index === 0;
+
+            if (isTabAtRoot) {
+                BackHandler.exitApp();
+                return true; 
+            }
+            return false;
+        };
+        BackHandler.addEventListener('hardwareBackPress', onBackPress);
+        return () => BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    }, [navState])
+  );
+  
   useEffect(() => { 
     setLanguage(appLanguage); 
     setIsRTL(appLanguage === 'ar'); 
@@ -449,14 +496,13 @@ function MainUIScreen({ appLanguage }) {
           {props => <DiaryStackNavigator {...props} setHasProgress={setHasProgress} theme={theme} t={t} isRTL={isRTL} language={language} />}
       </Tab.Screen>
       <Tab.Screen name="ReportsStack" options={{ tabBarLabel: t('reportsTab'), tabBarIconName: 'stats-chart-outline' }}>
-          {props => <ReportsStackNavigator {...props} theme={theme} t={t} isRTL={isRTL} />}
+          {props => <ReportsStackNavigator {...props} theme={theme} language={language} />}
       </Tab.Screen>
       <Tab.Screen name="Camera" component={CameraScreen} options={{ tabBarLabel: t('cameraTab'), tabBarIconName: 'camera-outline' }} />
       <Tab.Screen 
         name="ProfileStack" 
         options={{ 
           tabBarLabel: t('profileTab'),
-          unmountOnBlur: true
         }}
       >
         {props => <ProfileStackNavigator {...props} theme={theme} t={t} onThemeChange={handleThemeChange} appLanguage={appLanguage} isRTL={isRTL} />}

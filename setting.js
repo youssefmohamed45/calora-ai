@@ -44,7 +44,7 @@ const translations = {
     invalidTimeFormat: 'Please enter the time in the correct HH:MM format',
     snackFeatureAlertTitle: "Unsupported Feature",
     snackTimePickerMessage: "This button works! On a real phone, the native time picker would open here.",
-    snackTaskManagerMessage: "Smart step notifications do not work in the web environment (Expo Snack). Please try on a real device.",
+    snackTaskManagerMessage: "Step counter background task is not supported in this environment. The reminder is saved as 'ON' but will only work on a real device build.",
     connectedApps: 'Connected Apps',
     googleFit: 'Google Fit',
     connect: 'Connect',
@@ -77,7 +77,7 @@ const translations = {
     invalidTimeFormat: 'الرجاء إدخال الوقت بالصيغة الصحيحة HH:MM',
     snackFeatureAlertTitle: "ميزة غير مدعومة",
     snackTimePickerMessage: "الزر يعمل! على الهاتف الحقيقي، ستفتح الساعة هنا لتحديد الوقت.",
-    snackTaskManagerMessage: "إشعارات الخطوات الذكية لا تعمل في بيئة الويب (Expo Snack). يرجى التجربة على هاتف حقيقي.",
+    snackTaskManagerMessage: "مهمة عداد الخطوات الخلفية غير مدعومة في هذه البيئة. تم حفظ التذكير على أنه 'مفعل' ولكنه لن يعمل إلا على نسخة هاتف حقيقية.",
     connectedApps: 'التطبيقات المرتبطة',
     googleFit: 'Google Fit',
     connect: 'اتصال',
@@ -269,32 +269,48 @@ const SettingsScreen = ({ navigation, onThemeChange, appLanguage }) => {
     }
   };
 
+  // ✅✅✅ --- الكود المعدل هنا --- ✅✅✅
   const handleToggleStepsReminder = async () => {
+    // 1. تحديث الحالة في الواجهة والحفظ فوراً
     const newReminders = { ...reminders, stepsGoal: { enabled: !reminders.stepsGoal.enabled } };
     setReminders(newReminders);
+    await AsyncStorage.setItem('reminderSettings', JSON.stringify(newReminders));
+
+    // لو المستخدم بيحاول يفعل الميزة
     if (newReminders.stepsGoal.enabled) {
+        // 2. تحقق من البيئة
         if (!TaskManager || typeof TaskManager.registerTaskAsync !== 'function') {
-            Alert.alert(t('snackFeatureAlertTitle'), "Step counter background task is not supported in this environment. Please use a custom development build of the app.");
-            setReminders(reminders); 
-            return;
+            // 3. اعرض رسالة الخطأ، لكن **لا تلغي تفعيل الزر**. خليه مفعل.
+            Alert.alert(
+                t('snackFeatureAlertTitle'), 
+                t('snackTaskManagerMessage')
+            );
+            return; // اخرج من الدالة
         }
+
+        // لو البيئة صح، كمل عادي واطلب الأذونات وسجل المهمة
         const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
         const { status: pedometerStatus } = await Pedometer.requestPermissionsAsync();
+
         if (notificationStatus !== 'granted' || pedometerStatus !== 'granted') {
             Alert.alert(t('notificationsPermissionTitle'), t('notificationsPermissionMessage'));
+            // لو رفض الأذونات، هنا لازم نلغي التفعيل
             const revertedState = { ...newReminders, stepsGoal: { enabled: false } };
             setReminders(revertedState);
             await AsyncStorage.setItem('reminderSettings', JSON.stringify(revertedState));
             return;
         }
-        await TaskManager.registerTaskAsync(STEPS_NOTIFICATION_TASK, { minimumInterval: 15 * 60, });
+
+        await TaskManager.registerTaskAsync(STEPS_NOTIFICATION_TASK, { minimumInterval: 15 * 60 });
+        Alert.alert(t('remindersSaved'));
+
+    // لو المستخدم بيقفل الميزة
     } else {
         if (TaskManager && typeof TaskManager.unregisterTaskAsync === 'function') {
             await TaskManager.unregisterTaskAsync(STEPS_NOTIFICATION_TASK);
         }
+        Alert.alert(t('remindersSaved'));
     }
-    await AsyncStorage.setItem('reminderSettings', JSON.stringify(newReminders));
-    Alert.alert(t('remindersSaved'));
   };
 
   const showTimePicker = (key) => {
