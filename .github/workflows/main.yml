@@ -1,1 +1,53 @@
-sd
+# اسم الملف المقترح: .github/workflows/build-android.yml
+# هذا هو الكود النهائي والكامل لبناء APK يعمل بكامل ميزاته على GitHub Actions
+
+name: Build Android Production APK
+
+on:
+  push:
+    branches: [ "main" ] # سيتم تشغيل هذا الـ workflow تلقائيًا عند أي تحديث لفرع "main"
+  workflow_dispatch: # يتيح لك تشغيل الـ workflow يدويًا من واجهة GitHub Actions
+
+jobs:
+  build:
+    name: Build Android App with EAS
+    runs-on: ubuntu-latest # سيتم تشغيله على خادم Linux
+
+    steps:
+      # الخطوة 1: تنزيل كود المشروع من المستودع
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # الخطوة 2: إعداد بيئة Node.js (استخدم نفس الإصدار الذي تستخدمه محليًا)
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm' # تفعيل الكاش لتسريع عمليات البناء المستقبلية
+
+      # الخطوة 3: تثبيت جميع مكتبات المشروع
+      - name: Install dependencies
+        run: npm install
+
+      # الخطوة 4: إعداد أدوات Expo و EAS CLI وتسجيل الدخول باستخدام الـ Token السري
+      - name: Set up Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest # استخدم دائمًا أحدث إصدار من EAS CLI
+          token: ${{ secrets.EXPO_TOKEN }} # استخدام الـ Token الذي قمت بإضافته في إعدادات GitHub
+
+      # الخطوة 5: بناء التطبيق باستخدام EAS (هذه هي الخطوة السحرية)
+      - name: Build the app
+        run: eas build --profile production --platform android --non-interactive --no-wait
+        # --profile production: يخبر EAS باستخدام إعدادات النسخة النهائية من ملف eas.json
+        # --platform android: يحدد أننا نريد بناء نسخة أندرويد
+        # --non-interactive: يمنع EAS من طرح أي أسئلة ويتجاوب بالإجابات الافتراضية
+        # --no-wait: يخبر EAS ببدء عملية البناء ثم الانتقال للخطوة التالية فورًا (لأن البناء يستغرق وقتًا)
+
+      # الخطوة 6 (اختياري): إضافة تعليق على الـ commit برابط لتتبع عملية البناء
+      - name: Add a comment to the commit
+        run: |
+          BUILD_URL="https://expo.dev/accounts/$(eas whoami --json | jq -r '.account')/projects/$(jq -r '.expo.slug' app.json)/builds"
+          gh pr comment ${{ github.event.pull_request.number }} --body "🚀 A new Android build has been started. You can track its progress here: $BUILD_URL" || echo "Not a PR, skipping comment."
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
