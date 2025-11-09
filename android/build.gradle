@@ -1,12 +1,11 @@
-// File: android/build.gradle - النسخة الكاملة والمعدلة لحل مشكلة Kotlin
+// File: android/build.gradle - الإصدار الثالث الكامل والمصحح
 
 buildscript {
     ext {
         buildToolsVersion = findProperty('android.buildToolsVersion') ?: '34.0.0'
         minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '23')
         compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '34')
-        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
-        // ✅ تم التأكيد على إصدار Kotlin هنا
+        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34'
         kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.23' 
         ndkVersion = findProperty('android.ndkVersion') ?: "25.1.8937393"
         googlePlayServicesAuthVersion = "20.7.0"
@@ -21,7 +20,6 @@ buildscript {
     dependencies {
         classpath('com.android.tools.build:gradle')
         classpath('com.facebook.react:react-native-gradle-plugin')
-        // ✅ تم تحديث هذا السطر لاستخدام المتغير kotlinVersion
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
         classpath('com.google.gms:google-services:4.4.1')
     }
@@ -47,19 +45,13 @@ def expoCameraMavenPath = new File(["node", "--print", "require.resolve('expo-ca
 allprojects { repositories { maven { url(expoCameraMavenPath) } } }
 
 
-// ✅✅✅ --- الكود الجديد المضاف في النهاية لفرض إصدار Kotlin على كل المشاريع --- ✅✅✅
+// ✅✅✅ --- الكود الجديد المضاف في النهاية (نسخة مبسطة بدون afterEvaluate) --- ✅✅✅
 subprojects {
-    afterEvaluate {project ->
-        if (project.hasProperty("android")) {
-            android {
-                compileSdkVersion rootProject.ext.compileSdkVersion
-                buildToolsVersion rootProject.ext.buildToolsVersion
-            }
-        }
-        // إجبار كل المشاريع الفرعية على استخدام نفس إصدار Kotlin
-        if (project.plugins.hasPlugin("kotlin-android") || project.plugins.hasPlugin("kotlin-android-extensions")) {
-            project.kotlin {
-                jvmToolchain(17) // استخدام Java 17 وهو متوافق مع إصدارات Gradle الحديثة
+    // هذا الكود سيطبق الإعدادات على كل مشروع فرعي مباشرة
+    if (project.plugins.hasPlugin("com.android.library")) {
+        project.android {
+            kotlin {
+                jvmToolchain(17)
             }
         }
     }
