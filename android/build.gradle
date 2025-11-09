@@ -1,46 +1,55 @@
-un ./gradlew assembleRelease
-Downloading https://services.gradle.org/distributions/gradle-8.8-all.zip
-.....................10%......................20%......................30%......................40%......................50%......................60%......................70%......................80%......................90%......................100%
+// File: android/build.gradle - Clean version
 
-Welcome to Gradle 8.8!
+buildscript {
+    ext {
+        buildToolsVersion = findProperty('android.buildToolsVersion') ?: '34.0.0'
+        minSdkVersion = Integer.parseInt(findProperty('android.minSdkVersion') ?: '23')
+        compileSdkVersion = Integer.parseInt(findProperty('android.compileSdkVersion') ?: '34')
+        targetSdkVersion = Integer.parseInt(findProperty('android.targetSdkVersion') ?: '34')
+        kotlinVersion = findProperty('android.kotlinVersion') ?: '1.9.23' 
+        ndkVersion = findProperty('android.ndkVersion') ?: "25.1.8937393"
+        googlePlayServicesAuthVersion = "20.7.0"
+        googlePlayServicesFitVersion = "21.2.0" 
+    }
 
-Here are the highlights of this release:
- - Running Gradle on Java 22
- - Configurable Gradle daemon JVM
- - Improved IDE performance for large projects
+    repositories {
+        google()
+        mavenCentral()
+    }
+    
+    dependencies {
+        classpath('com.android.tools.build:gradle')
+        classpath('com.facebook.react:react-native-gradle-plugin')
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
+        classpath('com.google.gms:google-services:4.4.1')
+    }
+}
 
-For more details see https://docs.gradle.org/8.8/release-notes.html
+apply plugin: "com.facebook.react.rootproject"
 
-Starting a Gradle Daemon (subsequent builds will be faster)
-> Task :react-settings-plugin:checkKotlinGradlePluginConfigurationErrors
-> Task :react-settings-plugin:pluginDescriptors
-> Task :react-settings-plugin:processResources
-> Task :react-settings-plugin:compileKotlin
-> Task :react-settings-plugin:compileJava NO-SOURCE
-> Task :react-settings-plugin:classes
-> Task :react-settings-plugin:jar
+allprojects {
+    repositories {
+        maven {
+            url(new File(['node', '--print', "require.resolve('react-native/package.json')"].execute(null, rootDir).text.trim(), '../android'))
+        }
+        maven {
+            url(new File(['node', '--print', "require.resolve('jsc-android/package.json', { paths: [require.resolve('react-native/package.json')] })"].execute(null, rootDir).text.trim(), '../dist'))
+        }
+        google()
+        mavenCentral()
+        maven { url 'https://www.jitpack.io' }
+    }
+}
 
-5 actionable tasks: 5 executed
-FAILURE: Build failed with an exception.
+def expoCameraMavenPath = new File(["node", "--print", "require.resolve('expo-camera/package.json')"].execute(null, rootDir).text.trim(), "../android/maven")
+allprojects { repositories { maven { url(expoCameraMavenPath) } } }
 
-* Where:
-Build file '/home/runner/work/calora-ai/calora-ai/android/build.gradle' line: 3
-
-* What went wrong:
-Could not compile build file '/home/runner/work/calora-ai/calora-ai/android/build.gradle'.
-> startup failed:
-  build file '/home/runner/work/calora-ai/calora-ai/android/build.gradle': 3: Unexpected input: '{' @ line 3, column 13.
-     buildscript {
-                 ^
-  
-  1 error
-
-
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-
-BUILD FAILED in 1m 27s
-Error: Process completed with exit code 1.
+subprojects {
+    if (project.plugins.hasPlugin("com.android.library")) {
+        project.android {
+            kotlin {
+                jvmToolchain(17)
+            }
+        }
+    }
+}
