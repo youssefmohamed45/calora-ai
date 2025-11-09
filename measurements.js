@@ -8,7 +8,7 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
-} from 'react-native';
+} from 'react-native'; 
 // ✅✅✅ الخطوة 1: استيراد المكتبة البديلة ✅✅✅
 import Slider from '@react-native-community/slider'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
